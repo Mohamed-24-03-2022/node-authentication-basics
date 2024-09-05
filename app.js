@@ -18,30 +18,32 @@ const pool = new Pool({
   port: 5432,
 });
 
-
 var app = express();
-
-
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
-
-/*__________________________________________________________________________________________________________*/
-app.use(session({ secret: 'cats', resave: false, saveUninitialized: false }));
-app.use(passport.session());
-/*__________________________________________________________________________________________________________*/
-
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
 
-/*_________________________________________________________________________________________________________*/
+/*__________________________________________________________________________________________________________*/
+app.use(
+  session({
+    secret: 'cats',
+    resave: false,
+    saveUninitialized: false,
+    // cookie: { maxAge: 24 * 60 * 60 * 1000 }, // equal to 1 day
+    // currently using memory to store sessions id
+  })
+);
+app.use(passport.session());
+
 /* LocalStrategy function setup */
-// it will be used when we call passport.authenticate() 
+// it will be used when we call passport.authenticate()
 // it acts a bit like a middleware and will be called for us when we ask passport to do the authentication later
+// passport.use(strategy);
 passport.use(
   new LocalStrategy(async (username, password, done) => {
     try {
@@ -52,12 +54,13 @@ passport.use(
         return done(null, false, { message: 'Incorrect username' });
       }
 
-      const match = await bcrypt.compare(password, user.password)
+      const match = await bcrypt.compare(password, user.password);
       if (!match) {
         return done(null, false, { message: 'Incorrect password' });
       }
 
       return done(null, user);
+
     } catch (err) {
       done(err);
     }
@@ -81,24 +84,17 @@ passport.deserializeUser(async (id, done) => {
 
     done(null, user);
   } catch (error) {
-    done(error)
+    done(error);
   }
-})
+});
 /*__________________________________________________________________________________________________________*/
 
-
-
 // to have access to the current user in all our views without passing it to each controller
-// Make it accessible to all views template 
+// Make it accessible to all views template
 app.use((req, res, next) => {
   res.locals.currentUser = req.user;
   next();
 });
-
-
-
-
-
 
 app.get('/', (req, res, next) => {
   res.render('index', {});
@@ -107,43 +103,39 @@ app.get('/sign-up', (req, res, next) => {
   res.render('sign-up-form');
 });
 app.post('/sign-up', async (req, res, next) => {
-
   bcrypt.hash(req.body.password, 10, async (err, hashedPassword) => {
     if (err) {
       return next(err);
     }
 
     try {
-      await pool.query('INSERT INTO users (username, password) VALUES ($1, $2)', [req.body.username, hashedPassword]);
+      await pool.query('INSERT INTO users (username, password) VALUES ($1, $2)', [
+        req.body.username,
+        hashedPassword,
+      ]);
       res.redirect('/');
     } catch (error) {
       return next(error);
     }
   });
-
 });
-app.post("/log-in",
+app.post(
+  '/log-in',
 
-  passport.authenticate("local", {
-    successRedirect: "/",
-    failureRedirect: "/"
+  passport.authenticate('local', {
+    successRedirect: '/',
+    failureRedirect: '/',
   })
-
 );
 app.get('/log-out', (req, res, next) => {
-
-  req.logout((err => {
+  req.logout((err) => {
     if (err) {
       return next(err);
     }
 
-    res.redirect('/')
-  }));
+    res.redirect('/');
+  });
 });
-
-
-
-
 
 // catch 404 and forward to error handler
 app.use(function (req, res, next) {
@@ -160,8 +152,6 @@ app.use(function (err, req, res, next) {
   res.json(err);
 });
 
-
-
 app.listen(3000, () => {
   console.log('listening on port', 3000);
-})
+});
