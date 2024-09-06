@@ -35,7 +35,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     // cookie: { maxAge: 24 * 60 * 60 * 1000 }, // equal to 1 day
-    // currently using memory to store sessions id
+    //store:  // currently using the memory to store sessions id
   })
 );
 app.use(passport.session());
@@ -43,9 +43,10 @@ app.use(passport.session());
 /* LocalStrategy function setup */
 // it will be used when we call passport.authenticate()
 // it acts a bit like a middleware and will be called for us when we ask passport to do the authentication later
-// passport.use(strategy);
+// passport.use(strategy(verifyCallback));
 passport.use(
   new LocalStrategy(async (username, password, done) => {
+    // inside verifyCallback
     try {
       const { rows } = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
       const user = rows[0];
@@ -67,7 +68,7 @@ passport.use(
   })
 );
 
-/* Sessions and Serialization functions setup */
+/* Sessions and Serialization setup */
 // To make sure our user is logged in, and to allow him to stay logged in as he moves around our app
 // passport internally calls a function from express-session that uses some data to create a cookie called connect.sid which is stored in the user’s browser.
 // These next two functions define what bit of information passport is looking for when it creates and then decodes the cookie.
@@ -76,13 +77,21 @@ passport.use(
 // We ain't calling these two functions; they’re used in the background by passport
 passport.serializeUser((user, done) => {
   done(null, user.id);
+  // When authenticated, it sets req.session.passport.user = user.id and set it into a cookie
 });
+// Upon some other request, if it finds a matching session for that request, 
+//  passport.deserializeUser will retrieve the id we stored in the session data
 passport.deserializeUser(async (id, done) => {
   try {
     const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
     const user = rows[0];
 
-    done(null, user);
+    // set req.user, retrieving id from a cookie if it finds a matching sessions for that request
+    if (user)
+      done(null, user);
+    else
+      done(null, false)
+
   } catch (error) {
     done(error);
   }
@@ -122,13 +131,13 @@ app.post('/sign-up', async (req, res, next) => {
 app.post(
   '/log-in',
 
-  passport.authenticate('local', {
+  passport.authenticate('local', {  // call req.login() and update the session.passport if succeeded
     successRedirect: '/',
     failureRedirect: '/',
   })
 );
 app.get('/log-out', (req, res, next) => {
-  req.logout((err) => {
+  req.logout((err) => {  // remove req.user, and clears the session.passport
     if (err) {
       return next(err);
     }
